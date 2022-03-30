@@ -1,20 +1,9 @@
-module Sexpr
+module Sinter.Sexpr.Parse
 
-import Lex
+import Sinter.Sexpr.Sexpr
+import Sinter.Sexpr.Lex
 
 import Text.Parser
-
-public export
-data Sexpr = SexprID String | SexprInt Integer
-           | SexprString String | Branch Sexpr Sexpr
-           | SNil
-
-Show Sexpr where
-  show (SexprID x) = x
-  show (SexprInt x) = show x
-  show (SexprString x) = show x
-  show (Branch x y) = "(" ++ show x ++ " " ++ show y ++ ")"
-  show SNil = "()"
 
 lParen : Grammar _ SinToken True ()
 lParen = terminal "Expected '('" (\case LParen => Just ()
@@ -79,9 +68,16 @@ mutual
        <|> parenExpr
        <|> listExpr
 
+sexprs : Grammar _ SinToken False (List Sexpr)
+sexprs = many sexpr
+
 public export
 tokensToSexpr : List (WithBounds SinToken) -> Either ? ?
 tokensToSexpr = parse sexpr
+
+public export
+tokensToSexprs : List (WithBounds SinToken) -> Either ? ?
+tokensToSexprs = parse sexprs
 
 public export
 stringToSexpr : String -> Maybe Sexpr

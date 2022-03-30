@@ -1,0 +1,22 @@
+[{
+    "modules": [
+        "Sinter",
+        "Sinter.GV",
+        "Sinter.Parse",
+	"Sinter.Sexpr",
+        "Sinter.Sexpr.Lex",
+        "Sinter.Sexpr.Parse",
+	"Sinter.Sexpr.Sexpr"
+    ],
+    "name": "Sinter",
+    "deps": [{
+        "name": "LLVMCAPI",
+        "git": {
+            "url": "https://github.com/magnostherobot/Idris2-LLVMCAPI",
+            "commit": "f53cd99b8ac8ef2b0fe5fd5ea561ee5e1995b30e"
+        }
+    }, {
+        "name": "contrib",
+        "legacy": true
+    }]
+}]

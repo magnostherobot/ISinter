@@ -1,4 +1,4 @@
-module Lex
+module Sinter.Sexpr.Lex
 
 import Data.List
 

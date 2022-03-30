@@ -1,12 +1,13 @@
-module Sinter
+module Sinter.Parse
 
 import Data.List
 
-import Sexpr
+import Sinter.Sexpr
 
+public export
 data Sinter = SInt Integer Nat
             | SStr String
-            | SIf Sinter Sinter Sinter
+            | SIf Sinter Sinter Sinter Nat
             | SLet String Sinter Sinter
             | SCase Sinter (List (Integer, Sinter)) Sinter Nat
             | SCall String (List Sinter)
@@ -14,13 +15,46 @@ data Sinter = SInt Integer Nat
 public export
 covering
 Show Sinter where
-  show (SInt v w) = concat [show v, "u", show w]
-  show (SStr x) = concat [show x, "s"]
-  show (SIf x y z) = concat ["if {", show x, "} then {", show y, "} else {", show z, "}"]
-  show (SLet x y z) = concat ["let {", show x, "} be {", show y, "} in {", show z, "}"]
+  show (SInt v w) =
+    concat [show v, "u", show w]
+  show (SStr x) =
+    concat [show x, "s"]
+  show (SIf x y z w) =
+    concat ["if ", show w, " {", show x, "} then {", show y,
+             "} else {", show z, "}"]
+  show (SLet x y z) =
+    concat ["let {", show x, "} be {", show y, "} in {", show z, "}"]
   show (SCase x xs y k) =
-    concat ["case ", show k, " {", show x, "} of {", show xs, "} default {", show y, "}"]
-  show (SCall x xs) = concat ["call {", x, "} args {", show xs, "}"]
+    concat ["case ", show k, " {", show x, "} of {",
+             show xs, "} default {", show y, "}"]
+  show (SCall x xs) =
+    concat ["call {", x, "} args {", show xs, "}"]
+
+genList : List Sexpr -> Sexpr
+genList = foldr Branch SNil
+
+SexprNat : Nat -> Sexpr
+SexprNat = SexprInt . natToInteger
+
+mutual
+
+  genCase : (Integer, Sinter) -> Sexpr
+  genCase (i, e) = Branch (SexprInt i) (gen e)
+
+  public export
+  gen : Sinter -> Sexpr
+  gen (SInt v w) =
+    (Branch (SexprNat w) (SexprInt v))
+  gen (SStr x) =
+    SexprString x
+  gen (SIf x y z w) =
+    genList [SexprID "if", gen x, gen y, gen z, SexprNat w]
+  gen (SLet x y z) =
+    genList [SexprID "let", Branch (SexprID x) (gen y), gen z]
+  gen (SCase x xs y w) =
+    genList [SexprID "case", gen x, genList $ map genCase xs, gen y, SexprNat w]
+  gen (SCall x xs) =
+    genList (SexprID x :: map gen xs)
 
 sid : Sexpr -> Maybe String
 sid (SexprID x) = Just x
@@ -62,12 +96,13 @@ list f x = case bs f x of
 mutual
 
   cond : Sexpr -> Maybe Sinter
-  cond s = do [SexprID "if", c, t, e] <- list Just s
+  cond s = do [SexprID "if", c, t, e, w] <- list Just s
                 | _ => empty
               c' <- parseBody c
               t' <- parseBody t
               e' <- parseBody e
-              pure $ SIf c' t' e'
+              w' <- snat w
+              pure $ SIf c' t' e' w'
   
   bind : Sexpr -> Maybe Sinter
   bind s = do [SexprID "let", x, y] <- list Just s
@@ -112,9 +147,21 @@ data SinterTL = SDef String (List String) Sinter
 public export
 covering
 Show SinterTL where
-  show (SDef x xs y) = concat ["def {", x, "} args {", show xs, "} as {", show y, "}"]
-  show (SDec x xs) = concat ["dec {", x, "} args {", show xs, "}"]
-  show (STyp x xs) = concat ["type {", x, "} members {", show xs, "}"]
+  show (SDef x xs y) =
+    concat ["def {", x, "} args {", show xs, "} as {", show y, "}"]
+  show (SDec x xs) =
+    concat ["dec {", x, "} args {", show xs, "}"]
+  show (STyp x xs) =
+    concat ["type {", x, "} members {", show xs, "}"]
+
+public export
+genTL : SinterTL -> Sexpr
+genTL (SDef x xs y) =
+  genList [SexprID "def", SexprID x, genList $ map SexprID xs, gen y]
+genTL (SDec x xs) =
+  genList [SexprID "dec", SexprID x, genList $ map SexprID xs]
+genTL (STyp x xs) =
+  genList [SexprID "type", SexprID x, genList $ map SexprID xs]
 
 def : Sexpr -> Maybe SinterTL
 def s = do [SexprID "def", n, ns, x] <- list Just s

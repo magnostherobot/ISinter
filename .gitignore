@@ -1,0 +1,12 @@
+env.sh
+
+.build/
+build/
+depends/
+Sinter.ipkg
+
+*.idr~
+*.o
+*.so
+
+*.sw?
