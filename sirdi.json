@@ -2,21 +2,26 @@
     "modules": [
         "Sinter",
         "Sinter.GV",
+        "Sinter.LLVM",
         "Sinter.Parse",
-	"Sinter.Sexpr",
+        "Sinter.Sexpr",
         "Sinter.Sexpr.Lex",
         "Sinter.Sexpr.Parse",
-	"Sinter.Sexpr.Sexpr"
+        "Sinter.Sexpr.Sexpr"
     ],
+    "main": "Sinter",
     "name": "Sinter",
     "deps": [{
         "name": "LLVMCAPI",
         "git": {
             "url": "https://github.com/magnostherobot/Idris2-LLVMCAPI",
-            "commit": "f53cd99b8ac8ef2b0fe5fd5ea561ee5e1995b30e"
+            "commit": "c533c0ebf3bc6a77b07b257ae56b7263f9dd4880"
         }
     }, {
         "name": "contrib",
+        "legacy": true
+    }, {
+        "name": "idris2",
         "legacy": true
     }]
 }]

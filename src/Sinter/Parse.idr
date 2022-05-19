@@ -7,6 +7,7 @@ import Sinter.Sexpr
 public export
 data Sinter = SInt Integer Nat
             | SStr String
+            | SID String
             | SIf Sinter Sinter Sinter Nat
             | SLet String Sinter Sinter
             | SCase Sinter (List (Integer, Sinter)) Sinter Nat
@@ -15,6 +16,7 @@ data Sinter = SInt Integer Nat
 public export
 covering
 Show Sinter where
+  show (SID n) = n
   show (SInt v w) =
     concat [show v, "u", show w]
   show (SStr x) =
@@ -43,6 +45,7 @@ mutual
 
   public export
   gen : Sinter -> Sexpr
+  gen (SID n) = SexprID n
   gen (SInt v w) =
     (Branch (SexprNat w) (SexprInt v))
   gen (SStr x) =
@@ -59,6 +62,10 @@ mutual
 sid : Sexpr -> Maybe String
 sid (SexprID x) = Just x
 sid _ = Nothing
+
+sval : Sexpr -> Maybe Sinter
+sval (SexprID x) = Just (SID x)
+sval _ = Nothing
 
 sstr : Sexpr -> Maybe String
 sstr (SexprString x) = Just x
@@ -138,6 +145,7 @@ mutual
              <|> call x
              <|> intlit x
              <|> strlit x
+             <|> sval x
 
 public export
 data SinterTL = SDef String (List String) Sinter
