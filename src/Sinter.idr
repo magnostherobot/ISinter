@@ -5,9 +5,12 @@ import Text.Parser
 import System.File
 import System
 
+import Control.Linear.LIO
+
 import Sinter.Sexpr
 import Sinter.Parse
 import Sinter.GV
+import Sinter.LLVM
 
 mmap : Monad m => (a -> m b) -> List a -> m (List b)
 mmap f [] = pure []
@@ -37,31 +40,34 @@ arg "llvm" = Just LLVM
 arg "gv" = Just GV
 arg _ = Nothing
 
-usage : IO a
+usage : HasIO io => io a
 usage = die "usage text here"
 
-unknown : String -> IO a
+unknown : HasIO io => String -> io a
 unknown x = do putStrLn ("unknown argument " ++ x)
                usage
 
-readArgs : IO Output
+readArgs : HasIO io => io Output
 readArgs = do [exec, out] <- getArgs
                 | _ => usage
               maybe (unknown out) pure (arg out)
 
-as : Output -> SinterTL -> String
-as Sinter = show
-as Sexpr = show . genTL
-as LLVM = ?as_rhs_2
-as GV = show . gvtl
+as : LinearIO io => Output -> SinterTL -> L io String
+as Sinter = pure . show
+as Sexpr = pure . show . genTL
+as LLVM = \x => compile [x] >>= showModule
+as GV = pure . show . gvtl
 
 forEach : Monad m => Foldable t => (a -> m ()) -> t a -> m ()
 forEach f xs = foldlM (\() => f) () xs
 
+mainL : L IO ()
+mainL = do out <- readArgs
+           Right contents <- fRead stdin
+           | Left err => printLn err
+           let Just sinters = parse contents
+           | x => putStrLn "parse error"
+           forEach (\x => as out x >>= putStrLn) sinters
+
 main : IO ()
-main = do out <- readArgs
-          Right contents <- fRead stdin
-            | Left err => printLn err
-          let Just sinters = parse contents
-            | x => putStrLn "parse error"
-          forEach (putStrLn . as out) sinters
+main = run mainL
