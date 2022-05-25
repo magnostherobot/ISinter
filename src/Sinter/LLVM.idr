@@ -353,9 +353,9 @@ compileDec w name args = do
   pure1 w
 
 foldlM : LinearIO io =>
-         ((1 _ : acc) -> elem -> L1 io acc) ->
+         ((1 _ : acc) -> e -> L1 io acc) ->
          (1 _ : acc) ->
-         List elem ->
+         List e ->
          L1 io acc
 foldlM f a [] = pure1 a
 foldlM f a (x :: xs) = do a <- f a x

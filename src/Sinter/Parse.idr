@@ -81,17 +81,17 @@ snat s = do x <- sint s
                  LT => Nothing
                  _  => pure $ cast x
 
-b : (Sexpr -> Maybe a) -> (Sexpr -> Maybe b) -> (Sexpr -> Maybe (a, b))
-b f g (Branch l r) = do l' <- f l
-                        r' <- g r
-                        pure (l', r')
-b _ _ _ = Nothing
+br : (Sexpr -> Maybe a) -> (Sexpr -> Maybe b) -> (Sexpr -> Maybe (a, b))
+br f g (Branch l r) = do l' <- f l
+                         r' <- g r
+                         pure (l', r')
+br _ _ _ = Nothing
 
 add : a -> (List a, b) -> (List a, b)
 add x (xs, y) = (x :: xs, y)
 
 bs : (Sexpr -> Maybe a) -> Sexpr -> (List a, Sexpr)
-bs f x = case b f Just x of
+bs f x = case br f Just x of
               Just (v, y) => add v $ bs f y
               Nothing => ([], x)
 
@@ -114,7 +114,7 @@ mutual
   bind : Sexpr -> Maybe Sinter
   bind s = do [SexprID "let", x, y] <- list Just s
                 | _ => empty
-              (n, e) <- b sid parseBody x
+              (n, e) <- br sid parseBody x
               y' <- parseBody y
               pure $ SLet n e y'
   
@@ -122,17 +122,17 @@ mutual
   case' s = do [SexprID "case", x, cs, d, w] <- list Just s
                  | _ => empty
                x'  <- parseBody x
-               cs' <- list (b sint parseBody) cs
+               cs' <- list (br sint parseBody) cs
                d'  <- parseBody d
                w'  <- snat w
                pure $ SCase x' cs' d' w'
   
   call : Sexpr -> Maybe Sinter
-  call s = do (n, ns) <- b sid (list parseBody) s
+  call s = do (n, ns) <- br sid (list parseBody) s
               pure $ SCall n ns
   
   intlit : Sexpr -> Maybe Sinter
-  intlit s = do (w, v) <- b snat sint s
+  intlit s = do (w, v) <- br snat sint s
                 pure $ SInt v w
   
   strlit : Sexpr -> Maybe Sinter
