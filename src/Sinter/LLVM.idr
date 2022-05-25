@@ -8,15 +8,6 @@ import Control.Linear.LIO
 import public LLVM
 import Sinter.Parse
 
-ScopeLayer : Type
-ScopeLayer = List (String, Value)
-
-getFromLayer : String -> ScopeLayer -> Maybe Value
-getFromLayer k [] = Nothing
-getFromLayer k ((k', v) :: xs) with (k == k')
-  _ | True  = Just v
-  _ | False = getFromLayer k xs
-
 Scope : Type
 Scope = List (String, Value)
 
@@ -346,22 +337,122 @@ compileDec w name args = do
   WW w _ <- getOrAdd name args w
   pure1 w
 
+foldlM : LinearIO io =>
+         ((1 _ : acc) -> elem -> L1 io acc) ->
+         (1 _ : acc) ->
+         List elem ->
+         L1 io acc
+foldlM f a [] = pure1 a
+foldlM f a (x :: xs) = do a <- f a x
+                          foldlM f a xs
+
+addStruct : LinearIO io =>
+            (1 w : W) ->
+            String ->
+            List String ->
+            L1 io (WWith Type')
+addStruct (MkW ctxt mod scope) name members = do
+  ?fed -- TODO need to edit structCreateNamed to respect linearity
+
+-- TODO
+buildStructGEP : LinearIO io => (1 b : BuilderAt bl) -> Type' -> Value -> Nat ->
+                 String -> L1 io (BuildResultAt bl Value)
+
+constructorFill : LinearIO io =>
+                  (space : Value) ->
+                  (type : Type') ->
+                  (f : Function) ->
+                  (1 b : BuilderAt bl) ->
+                  (i : Nat) ->
+                  L1 io (BuilderAt bl)
+constructorFill space type f b i = do
+  Result b pos <- buildStructGEP b type space i "pos"
+  let param = getParam f i
+  Result b _ <- buildStore b param pos
+  pure1 b
+
+constructorFills : LinearIO io =>
+                   (1 b : BuilderAt bl) ->
+                   (space : Value) ->
+                   (type : Type') ->
+                   (f : Function) ->
+                   (n : Nat) ->
+                   L1 io (BuilderAt bl)
+constructorFills b space type f Z = pure1 b
+constructorFills b space type f (S k) =
+  foldlM (constructorFill space type f) b [0..k]
+
+addConstructor : LinearIO io =>
+                 {mb : Maybe Block} ->
+                 (1 b : Builder mb) ->
+                 (1 w : W) ->
+                 String ->
+                 List String ->
+                 Type' ->
+                 L1 io BlockBuilderAndW
+addConstructor b (MkW ctxt mod scope) name members struct = do
+  let n = length members
+  type <- func n
+  M mod f <- addFunction mod name type
+  let scope = addToScope scope name (cast f)
+  bl <- appendBlock f "main"
+  b <- positionBuilderAtEnd b bl
+  Result b space <- buildGCCall b (sizeOf struct) "space"
+  Result b spaceCast <- buildPointerCast b space struct "space_cast"
+  b <- constructorFills b spaceCast struct f n
+  pure1 (BlBuW (Just bl) b (MkW ctxt mod scope))
+
+addArgAccess : LinearIO io =>
+               {mb : Maybe Block} ->
+               (1 b : Builder mb) ->
+               (1 w : W) ->
+               (structName : String) ->
+               (struct : Type') ->
+               (member : String) ->
+               (n : Nat) ->
+               L1 io BlockBuilderAndW
+addArgAccess b (MkW ctxt mod scope) structName struct member n = do
+  let name = structName ++ "." ++ member
+  type <- func 1
+  M mod f <- addFunction mod name type
+  let scope = addToScope scope name (cast f)
+  bl <- appendBlock f "main"
+  b <- positionBuilderAtEnd b bl
+  
+  let spaceCast = getParam f 0
+  Result b space <- buildPointerCast b spaceCast struct "uncast"
+  Result b ptr <- buildStructGEP b struct space n "member"
+  Result b v <- buildLoad b boxT ptr "deref"
+  Result b () <- buildRet b v
+
+  pure1 (BlBuW (Just bl) b (MkW ctxt mod scope))
+
+addArgAccesses : LinearIO io =>
+                 {mb : Maybe Block} ->
+                 (1 b : Builder mb) ->
+                 (1 w : W) ->
+                 (name : String) ->
+                 (members : List String) ->
+                 (struct : Type') ->
+                 L1 io BlockBuilderAndW
+addArgAccesses b w name members struct =
+  case length members of
+       Z => pure1 (BlBuW mb b w)
+       S k => foldlM (\(BlBuW _ b w), (n, i) =>
+             addArgAccess b w name struct n i)
+         (BlBuW mb b w) (zip members [0..k])
+
 compileType : LinearIO io =>
+              {mb : Maybe Block} ->
+              (1 b : Builder mb) ->
               (1 w : W) ->
               String ->
               List String ->
-              L1 io W
-compileType w name args = do
-  ?greuigh
-
--- compileType : HasIO io => Module -> String -> List String -> io Module
--- compileType mod name mems with (lookup name mod.structs)
---   _ | (Just _) = pure mod -- TODO should maybe error in this case
---   _ | Nothing  = do struct <- structCreateNamed ?ctxt name
---                     let body = replicate (length mems) boxT
---                     ?structSetBody struct body False
---                     pure $ { structs $= (insert name struct) } mod
--- 
+              L1 io BlockBuilderAndW
+compileType b w name args = do
+  WW w struct <- addStruct w name args
+  BlBuW _ b w <- addConstructor b w name args struct
+  addArgAccesses b w name args struct
 
 compileSin : LinearIO io =>
              {mb : Maybe Block} ->
@@ -371,7 +462,7 @@ compileSin : LinearIO io =>
              L1 io BlockBuilderAndW
 compileSin b w (SDef name args body) = compileDef b w name args body
 compileSin b w (SDec name args) = pure1 $ BlBuW mb b !(compileDec w name args)
-compileSin b w (STyp name mems) = pure1 $ BlBuW mb b !(compileType w name mems)
+compileSin b w (STyp name mems) = compileType b w name mems
 
 compileSins : LinearIO io =>
               {mb : Maybe Block} ->
