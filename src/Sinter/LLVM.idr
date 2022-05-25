@@ -46,17 +46,18 @@ boxT = pointerType (intType 8)
 gcType : LinearIO io => L io Type'
 gcType = functionType boxT [intType 64] False
 
-gcFunc : Function
+buildGCCall : LinearIO io => (1 b : BuilderAt bl) -> Scope ->
+              Value -> String -> L1 io (BuildResultAt bl Value)
+buildGCCall b scope arg name = do
+  let Just gcFunc = getFromScope "gc_alloc" scope
+    | Nothing => ?error3
+  buildCall b !gcType (cast gcFunc) [arg] name
 
-buildGCCall : LinearIO io => (1 b : BuilderAt bl) -> Value -> String ->
+buildBox : LinearIO io => (1 b : BuilderAt bl) -> Scope -> Value ->
            L1 io (BuildResultAt bl Value)
-buildGCCall b arg name = buildCall b !gcType gcFunc [arg] name
-
-buildBox : LinearIO io => (1 b : BuilderAt bl) -> Value ->
-           L1 io (BuildResultAt bl Value)
-buildBox b unboxed = do
+buildBox b scope unboxed = do
   let size = sizeOf boxT
-  Result b rawBox <- buildGCCall b size "boxed"
+  Result b rawBox <- buildGCCall b scope size "boxed"
   Result b box <- buildPointerCast b rawBox boxT "box_uncast"
   Result b _ <- buildStore b unboxed box
   pure1 $ Result b box
@@ -109,6 +110,16 @@ compileSinterBody' : LinearIO io =>
 
 compileInt : (value : Integer) -> (width : Nat) -> Value
 compileInt v w = constInt (intType w) v False
+
+compileIntBoxed : LinearIO io =>
+                  (1 b : BuilderAt bl) ->
+                  Scope ->
+                  (value : Integer) ->
+                  (width : Nat) ->
+                  L1 io (BuildResultAt bl Value)
+compileIntBoxed b scope v w = do
+  let int = compileInt v w
+  buildBox b scope int
 
 compileString : LinearIO io =>
                 (1 builder : BuilderAt bl) ->
@@ -273,7 +284,8 @@ compileCall b ctxt fname args = do
   let MkBodyContext (MkW c m scope) g = ctxt
   let Just f = getFromScope fname scope
     | Nothing => ?error1 -- TODO
-  Result b v <- buildCall b boxT (cast f) (fromList args') ""
+  t <- func (length args)
+  Result b v <- buildCall b t (cast f) (fromList args') ""
   let ctxt = MkBodyContext (MkW c m scope) g
   pure1 $ C block b ctxt v
 
@@ -284,8 +296,11 @@ compileSinterBody' b ctxt (SID n) = do
   let ctxt = MkBodyContext (MkW c m scope) f
   pure1 $ C bl b ctxt v
 
-compileSinterBody' b ctxt (SInt v w) =
-  pure1 $ C bl b ctxt (compileInt v w)
+compileSinterBody' b ctxt (SInt v w) = do
+  let MkBodyContext (MkW c m scope) f = ctxt
+  Result b res <- compileIntBoxed b scope v w
+  let ctxt = MkBodyContext (MkW c m scope) f
+  pure1 $ C bl b ctxt res
 
 compileSinterBody' b ctxt (SStr str) = do
   Result b x <- compileString b str
@@ -352,11 +367,10 @@ addStruct : LinearIO io =>
             List String ->
             L1 io (WWith Type')
 addStruct (MkW ctxt mod scope) name members = do
-  ?fed -- TODO need to edit structCreateNamed to respect linearity
-
--- TODO
-buildStructGEP : LinearIO io => (1 b : BuilderAt bl) -> Type' -> Value -> Nat ->
-                 String -> L1 io (BuildResultAt bl Value)
+  let n = length members
+  ctxt <# type <- structCreateNamed ctxt name
+  structSetBody type (replicate n boxT) False
+  pure1 $ WW (MkW ctxt mod scope) type
 
 constructorFill : LinearIO io =>
                   (space : Value) ->
@@ -397,7 +411,7 @@ addConstructor b (MkW ctxt mod scope) name members struct = do
   let scope = addToScope scope name (cast f)
   bl <- appendBlock f "main"
   b <- positionBuilderAtEnd b bl
-  Result b space <- buildGCCall b (sizeOf struct) "space"
+  Result b space <- buildGCCall b scope (sizeOf struct) "space"
   Result b spaceCast <- buildPointerCast b space struct "space_cast"
   b <- constructorFills b spaceCast struct f n
   pure1 (BlBuW (Just bl) b (MkW ctxt mod scope))
@@ -475,11 +489,19 @@ compileSins b w (x :: xs) = do BlBuW mb b w <- compileSin b w x
                                compileSins b w xs
 
 public export
+mkW : LinearIO io => L1 io W
+mkW = do mod <- createModuleWithName ""
+         type <- gcType
+         M mod f <- addFunction mod "gc_alloc" type
+         let scope = [("gc_alloc", cast f)]
+         ctxt <- contextCreate
+         let w = MkW ctxt mod scope
+         pure1 w
+
+public export
 compile : LinearIO io => List SinterTL -> L1 io Module
 compile sins = do b <- createBuilder
-                  mod <- createModuleWithName "module_name"
-                  ctxt <- contextCreate
-                  let w = MkW ctxt mod []
+                  w <- mkW
                   BlBuW _ b (MkW ctxt mod _) <- compileSins b w sins
                   disposeBuilder b
                   contextDispose ctxt
