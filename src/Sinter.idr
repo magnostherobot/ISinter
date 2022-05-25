@@ -7,6 +7,7 @@ import System
 
 import Control.Linear.LIO
 
+import public Sinter.Sinter
 import Sinter.Sexpr
 import Sinter.Parse
 import Sinter.GV

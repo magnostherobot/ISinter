@@ -6,7 +6,7 @@ import Libraries.Data.StringMap
 import Control.Linear.LIO
 
 import public LLVM
-import Sinter.Parse
+import Sinter.Sinter
 
 Scope : Type
 Scope = List (String, Value)
