@@ -30,7 +30,7 @@ mutual
   gen (SCase x xs y w) =
     genList [SexprID "case", gen x, genList $ map genCase xs, gen y, SexprNat w]
   gen (SCall x xs) =
-    genList (SexprID x :: map gen xs)
+    genList (gen x :: map gen xs)
 
 sid : Sexpr -> Maybe String
 sid (SexprID x) = Just x
@@ -101,7 +101,7 @@ mutual
                pure $ SCase x' cs' d' w'
   
   call : Sexpr -> Maybe Sinter
-  call s = do (n, ns) <- br sid (list parseBody) s
+  call s = do (n, ns) <- br parseBody (list parseBody) s
               pure $ SCall n ns
   
   intlit : Sexpr -> Maybe Sinter

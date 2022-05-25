@@ -7,7 +7,7 @@ data Sinter = SInt Integer Nat
             | SIf Sinter Sinter Sinter Nat
             | SLet String Sinter Sinter
             | SCase Sinter (List (Integer, Sinter)) Sinter Nat
-            | SCall String (List Sinter)
+            | SCall Sinter (List Sinter)
 
 public export
 covering
@@ -26,7 +26,7 @@ Show Sinter where
     concat ["case ", show k, " {", show x, "} of {",
              show xs, "} default {", show y, "}"]
   show (SCall x xs) =
-    concat ["call {", x, "} args {", show xs, "}"]
+    concat ["call {", show x, "} args {", show xs, "}"]
 
 public export
 data SinterTL = SDef String (List String) Sinter

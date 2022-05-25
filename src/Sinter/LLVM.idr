@@ -276,17 +276,14 @@ compileCall : LinearIO io =>
               {bl : Block} ->
               (1 builder : BuilderAt bl) ->
               (1 ctxt : BodyContext) ->
-              (fname : String) ->
+              (fsin : Sinter) ->
               (args : List Sinter) ->
               L1 io (LDCPair Value)
-compileCall b ctxt fname args = do
+compileCall b ctxt fsin args = do
+  C block b ctxt f <- compileSinterBody' b ctxt fsin
   C block b ctxt args' <- compileArgs b ctxt args
-  let MkBodyContext (MkW c m scope) g = ctxt
-  let Just f = getFromScope fname scope
-    | Nothing => ?error1 -- TODO
   t <- func (length args)
   Result b v <- buildCall b t (cast f) (fromList args') ""
-  let ctxt = MkBodyContext (MkW c m scope) g
   pure1 $ C block b ctxt v
 
 compileSinterBody' b ctxt (SID n) = do
@@ -315,8 +312,8 @@ compileSinterBody' b ctxt (SLet new old body) =
 compileSinterBody' b ctxt (SCase val cases else' w) =
   compileCase b ctxt val cases else' w
 
-compileSinterBody' b ctxt (SCall fname args) =
-  compileCall b ctxt fname args
+compileSinterBody' b ctxt (SCall f args) =
+  compileCall b ctxt f args
 
 record BlockBuilderAndW where
   constructor BlBuW
