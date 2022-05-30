@@ -240,7 +240,7 @@ compileCase : LinearIO io =>
               (width : Nat) ->
               L1 io (LDCPair Value)
 compileCase b ctxt val cases else' width = do
-  C _ b ctxt valResult <- compileSinterBody' b ctxt val
+  C bl' b ctxt valResult <- compileSinterBody' b ctxt val
   Result b unboxed <- buildUnbox b valResult width
 
   let MkBodyContext w f = ctxt
@@ -251,7 +251,7 @@ compileCase b ctxt val cases else' width = do
   C elseEnd b ctxt elseResult <- compileSinterBody' b ctxt else'
   Result b _ <- buildBr b mergeBlock
 
-  b <- positionBuilderAtEnd b bl
+  b <- positionBuilderAtEnd b bl'
   Result b switch <- buildSwitch b unboxed elseBlock (length cases)
 
   C _ b ctxt vsbs <- compileCaseBranches b ctxt switch mergeBlock cases width
