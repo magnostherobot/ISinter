@@ -43,8 +43,11 @@ record BodyContext where
 boxT : Type'
 boxT = pointerType (intType 8)
 
+sizeT : Type'
+sizeT = typeOf (sizeOf boxT)
+
 gcType : LinearIO io => L io Type'
-gcType = functionType boxT [intType 64] False
+gcType = functionType boxT [sizeT] False
 
 buildGCCall : LinearIO io => (1 b : BuilderAt bl) -> Scope ->
               Value -> String -> L1 io (BuildResultAt bl Value)
@@ -409,8 +412,10 @@ addConstructor b (MkW ctxt mod scope) name members struct = do
   bl <- appendBlock f "main"
   b <- positionBuilderAtEnd b bl
   Result b space <- buildGCCall b scope (sizeOf struct) "space"
-  Result b spaceCast <- buildPointerCast b space struct "space_cast"
+  let structPtr = pointerType struct
+  Result b spaceCast <- buildPointerCast b space structPtr "space_cast"
   b <- constructorFills b spaceCast struct f n
+  Result b () <- buildRet b space
   pure1 (BlBuW (Just bl) b (MkW ctxt mod scope))
 
 addArgAccess : LinearIO io =>
@@ -429,9 +434,9 @@ addArgAccess b (MkW ctxt mod scope) structName struct member n = do
   let scope = addToScope scope name (cast f)
   bl <- appendBlock f "main"
   b <- positionBuilderAtEnd b bl
-  
-  let spaceCast = getParam f 0
-  Result b space <- buildPointerCast b spaceCast struct "uncast"
+
+  let param = getParam f 0
+  Result b space <- buildPointerCast b param (pointerType struct) "uncast"
   Result b ptr <- buildStructGEP b struct space n "member"
   Result b v <- buildLoad b boxT ptr "deref"
   Result b () <- buildRet b v
@@ -487,11 +492,11 @@ compileSins b w (x :: xs) = do BlBuW mb b w <- compileSin b w x
 
 public export
 mkW : LinearIO io => L1 io W
-mkW = do mod <- createModuleWithName ""
+mkW = do ctxt <- contextCreate
+         (ctxt # mod) <- createModuleWithName "" ctxt
          type <- gcType
          M mod f <- addFunction mod "gc_alloc" type
          let scope = [("gc_alloc", cast f)]
-         ctxt <- contextCreate
          let w = MkW ctxt mod scope
          pure1 w
 
@@ -501,7 +506,8 @@ compile sins = do b <- createBuilder
                   w <- mkW
                   BlBuW _ b (MkW ctxt mod _) <- compileSins b w sins
                   disposeBuilder b
-                  contextDispose ctxt
+                  let (MkCtxt c) = ctxt
+                  -- contextDispose ctxt
                   pure1 mod
 
 public export

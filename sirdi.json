@@ -15,7 +15,7 @@
         "name": "LLVMCAPI",
         "git": {
             "url": "https://github.com/magnostherobot/Idris2-LLVMCAPI",
-            "commit": "85684d53e7a127cdc8457a2221423bb49fdb9644"
+            "commit": "d3109c07a1a360a3608980ee8e66ca112e949ba6"
         }
     }, {
         "name": "contrib",

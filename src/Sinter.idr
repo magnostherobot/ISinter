@@ -65,9 +65,9 @@ forEach f xs = foldlM (\() => f) () xs
 mainL : L IO ()
 mainL = do out <- readArgs
            Right contents <- fRead stdin
-           | Left err => printLn err
+             | Left err => printLn err
            let Just sinters = parse contents
-           | x => putStrLn "parse error"
+             | x => putStrLn "parse error"
            forEach (\x => as out x >>= putStrLn) sinters
 
 main : IO ()
