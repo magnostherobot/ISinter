@@ -249,7 +249,9 @@ compileCase b ctxt val cases else' width = do
   let ctxt = MkBodyContext w f
   b <- positionBuilderAtEnd b elseBlock
   C elseEnd b ctxt elseResult <- compileSinterBody' b ctxt else'
+  Result b _ <- buildBr b mergeBlock
 
+  b <- positionBuilderAtEnd b bl
   Result b switch <- buildSwitch b unboxed elseBlock (length cases)
 
   C _ b ctxt vsbs <- compileCaseBranches b ctxt switch mergeBlock cases width
