@@ -56,14 +56,14 @@ buildGCCall b scope arg name = do
     | Nothing => ?error3
   buildCall b !gcType (cast gcFunc) [arg] name
 
-buildBox : LinearIO io => (1 b : BuilderAt bl) -> Scope -> Value ->
+buildBox : LinearIO io => (1 b : BuilderAt bl) -> Scope -> Value -> Type' ->
            L1 io (BuildResultAt bl Value)
-buildBox b scope unboxed = do
+buildBox b scope unboxed unboxedT = do
   let size = sizeOf boxT
   Result b rawBox <- buildGCCall b scope size "boxed"
-  Result b box <- buildPointerCast b rawBox boxT "box_uncast"
+  Result b box <- buildPointerCast b rawBox (pointerType unboxedT) "box_uncast"
   Result b _ <- buildStore b unboxed box
-  pure1 $ Result b box
+  pure1 $ Result b rawBox
 
 buildUnbox : LinearIO io => (1 b : BuilderAt bl) -> Value -> (width : Nat) ->
              L1 io (BuildResultAt bl Value)
@@ -122,7 +122,7 @@ compileIntBoxed : LinearIO io =>
                   L1 io (BuildResultAt bl Value)
 compileIntBoxed b scope v w = do
   let int = compileInt v w
-  buildBox b scope int
+  buildBox b scope int (intType w)
 
 compileString : LinearIO io =>
                 (1 builder : BuilderAt bl) ->
