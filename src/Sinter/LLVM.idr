@@ -271,6 +271,7 @@ ca : LinearIO io =>
 ca b ctxt [] acc = pure1 $ C bl b ctxt acc
 ca b ctxt (x :: xs) acc = do
   C block b ctxt v <- compileSinterBody' b ctxt x
+  Result b v <- buildPointerCast b v boxT "cast"
   ca b ctxt xs (v :: acc)
 
 compileArgs : LinearIO io =>
